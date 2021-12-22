@@ -15,7 +15,8 @@ public class IOHandler implements Runnable{
     private static Random random = new Random();
 
     private Integer code;
-    
+
+    private int count = 0;
 
     private String fileName;
     private Long size;
@@ -40,7 +41,8 @@ public class IOHandler implements Runnable{
 
     @Override
     public void run() {
-        ByteBuffer byteBuffer = ByteBuffer.allocate(1024*1024);
+        ByteBuffer byteBuffer = ByteBuffer.allocate(1024*1024*128);
+
         int length;
         try {
             length = socketChannel.read(byteBuffer);
@@ -111,21 +113,24 @@ public class IOHandler implements Runnable{
             case SEND:
                 if(length>0){
                     try {
-
-                        codesToReceive.get(code).write(byteBuffer);
+                        count+=length;
+                        var sc = codesToReceive.get(code);
+                        while (sc.write(byteBuffer)<=0){}
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
                 }else if(length<0){
-//                    try {
-//                        codesToReceive.get(code).shutdownOutput();
-//                        codesToReceive.get(code).close();
-//                        codes.get(code).getSocketChannel().close();
-//                        codesToReceive.remove(code);
-//                        codes.remove(code);
-//                    } catch (IOException e) {
-//                        e.printStackTrace();
-//                    }
+                    try {
+                        System.out.println(count);
+                        codes.get(code).getSocketChannel().close();
+                        codesToReceive.get(code).shutdownOutput();
+                        codesToReceive.remove(code);
+                        codes.remove(code);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+
+
                 }
             case RECEIVE:
         }

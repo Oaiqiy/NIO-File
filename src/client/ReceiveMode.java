@@ -26,7 +26,8 @@ public class ReceiveMode implements Runnable{
 
         while (true){
             System.out.print("Please enter directory path:");
-            String pathString = scanner.next();
+            //String pathString = scanner.next();
+            String pathString = "D:\\test";
             path = Path.of(pathString);
 
             File folder = path.toFile();
@@ -39,7 +40,7 @@ public class ReceiveMode implements Runnable{
         while (true){
             System.out.print("Please enter download code:");
             int code = scanner.nextInt();
-            byteBuffer = ByteBuffer.allocate(1024*1024);
+            byteBuffer = ByteBuffer.allocate(1024*1024*512);
             byteBuffer.putInt(1);
             byteBuffer.putInt(code);
             byteBuffer.flip();
@@ -77,10 +78,18 @@ public class ReceiveMode implements Runnable{
                 FileChannel fileChannel = fileOutputStream.getChannel();
                 byteBuffer.clear();
                 System.out.println("Start receiving......");
+
+
+
+
+
+
+
+
                 int l ;
                 int count = 0;
                 int rate = 0;
-                while ((l=socketChannel.read(byteBuffer))>=0){
+                while ((l=socketChannel.read(byteBuffer))>0){
                     count += l;
                     byteBuffer.flip();
                     fileChannel.write(byteBuffer);
@@ -92,8 +101,8 @@ public class ReceiveMode implements Runnable{
                     rate = now;
                 }
 
-                fileChannel.force(true);
 
+                fileChannel.force(true);
                 fileChannel.close();
                 socketChannel.close();
                 System.out.println("End of receiving. Bye~");

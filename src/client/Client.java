@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
 
 public class Client {
-    public static void main(String[] args) {
+    public static void main(String[] args){
         Scanner scanner = new Scanner(System.in);
         SocketChannel socketChannel;
 
@@ -30,6 +30,12 @@ public class Client {
             new SendMode(socketChannel).run();
         }else if(mode.charAt(0)=='r' || mode.charAt(0)=='R'){
             new ReceiveMode(socketChannel).run();
+        }
+
+        try {
+            socketChannel.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
     }
