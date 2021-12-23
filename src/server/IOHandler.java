@@ -19,16 +19,19 @@ public class IOHandler implements Runnable{
     private Long size;
     STATUS status = STATUS.INIT;
     private final SocketChannel socketChannel;
-    private SelectionKey selectionKey;
-    ByteBuffer byteBuffer = ByteBuffer.allocate(1024*1024*16);
+    private ByteBuffer byteBuffer = ByteBuffer.allocate(1024*128);
+    private SelectionKey sk;
+    private int sendStatus = 0;
 
     IOHandler(SocketChannel c, Selector selector)  {
-        System.out.println("aaaa");
+
+
+
         socketChannel = c;
         try {
             socketChannel.configureBlocking(false);
-            selectionKey = socketChannel.register(selector, SelectionKey.OP_READ);
-            selectionKey.attach(this);
+            sk = socketChannel.register(selector, SelectionKey.OP_READ);
+            sk.attach(this);
             selector.wakeup();
         } catch (IOException e) {
             e.printStackTrace();
@@ -36,29 +39,26 @@ public class IOHandler implements Runnable{
 
     }
 
+
     @Override
     public void run() {
+
+
         int length;
 
-
-//        try {
-//            length = socketChannel.read(byteBuffer);
-//            byteBuffer.flip();
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//            return;
-//        }
-//
         switch (status){
             case INIT:
 
                 try {
+                    byteBuffer.clear();
                     length = socketChannel.read(byteBuffer);
                     byteBuffer.flip();
                 } catch (IOException e) {
                     e.printStackTrace();
                     return;
                 }
+
+
                 if(byteBuffer.getInt()==0){
                    status = STATUS.SEND;
                    size = byteBuffer.getLong();
@@ -73,38 +73,53 @@ public class IOHandler implements Runnable{
                    byteBuffer.clear();
                    byteBuffer.putInt(code);
                    byteBuffer.flip();
-                   try {
-                        socketChannel.write(byteBuffer);
-                   } catch (IOException e) {
-                        e.printStackTrace();
-                   }
-                   byteBuffer.clear();
+//                   try {
+//                        socketChannel.write(byteBuffer);
+//                   } catch (IOException e) {
+//                        e.printStackTrace();
+//                   }
+                    sk.interestOps(SelectionKey.OP_WRITE);
+
+//                    byteBuffer.clear();
 
                 }else {
                     status = STATUS.RECEIVE;
                     int temp = byteBuffer.getInt();
                     var ioHandler = codes.get(temp);
-                    codesToReceive.put(temp, this);
+
                     byteBuffer.clear();
 
                     if (codes.containsKey(temp)) {
+
+                        codesToReceive.put(temp, this);
                         code = temp;
                         byteBuffer.putInt(1);
                         byteBuffer.putLong(ioHandler.size);
                         byteBuffer.put(ioHandler.fileName.getBytes(StandardCharsets.UTF_8));
                         byteBuffer.flip();
-                        try {
-                            ioHandler.getSocketChannel().write(byteBuffer);
-                            byteBuffer.rewind();
-                            socketChannel.write(byteBuffer);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
+
+                        codes.get(code).getByteBuffer().clear();
+                        codes.get(code).getByteBuffer().put(byteBuffer.array(),0,byteBuffer.limit());
+                        codes.get(code).getSk().interestOps(SelectionKey.OP_WRITE);
+                        sk.interestOps(SelectionKey.OP_WRITE);
+
+
+//                        try {
+//                            ioHandler.getSocketChannel().write(byteBuffer);
+//                            byteBuffer.rewind();
+//                            socketChannel.write(byteBuffer);
+//                        } catch (IOException e) {
+//                            e.printStackTrace();
+//                        }
                     } else {
                         byteBuffer.putInt(2);
                         byteBuffer.flip();
                         try {
+
                             socketChannel.write(byteBuffer);
+                            socketChannel.shutdownOutput();
+                            socketChannel.close();
+
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
@@ -112,77 +127,149 @@ public class IOHandler implements Runnable{
                     }
 
                 }
-                byteBuffer.clear();
+//                byteBuffer.clear();
                 break;
 
 
             case SEND:
-//                if(selectionKey.isWritable())
-//                    return;
+                if (sk.isWritable()) {
 
+                    if (sendStatus == 0) {
+                        try {
+                            socketChannel.write(byteBuffer);
+                            if (byteBuffer.position() < byteBuffer.limit()) {
+                                return;
+                            }
+                            byteBuffer.clear();
+                            sendStatus++;
+                            sk.interestOps(0);
+                            byteBuffer.clear();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    } else if (sendStatus == 1) {
+                        try {
+                            socketChannel.write(byteBuffer);
+                            if (byteBuffer.position() < byteBuffer.limit()) {
+                                return;
+                            }
+                            byteBuffer.clear();
+                            sendStatus++;
+                            sk.interestOps(SelectionKey.OP_READ);
+                            byteBuffer.clear();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+
+                    }
+                    return;
+                }
+
+                //System.out.println("send");
                 try {
+
                     length = socketChannel.read(byteBuffer);
                 } catch (IOException e) {
                     e.printStackTrace();
                     return;
                 }
 
+                //send+=length;
+
+
                 if(length>0){
-                    try {
-                        byteBuffer.flip();
-                        var sc = codesToReceive.get(code);
-                        while (sc.getSocketChannel().write(byteBuffer)<=0){}
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+                    //System.out.println(">0");
+//                    try {
+//                        var sc = codesToReceive.get(code);
+//                        while (sc.write(byteBuffer)<=0){}
+//                    } catch (IOException e) {
+//                        e.printStackTrace();
+//                    }
                 }else if(length<0){
                     try {
-                        codesToReceive.get(code).getSelectionKey().interestOps(SelectionKey.OP_WRITE);
+//                        System.out.println("send  " + send);
+
+                        byteBuffer.flip();
+                        var ioHandler = codesToReceive.get(code);
+                        ioHandler.getByteBuffer().clear();
+                        ioHandler.getByteBuffer().put(byteBuffer.array(),0,byteBuffer.limit());
+                        ioHandler.getByteBuffer().flip();
+                        ioHandler.getSk().interestOps(SelectionKey.OP_WRITE);
+                        sk.cancel();
+
                         codes.get(code).getSocketChannel().close();
-                        codesToReceive.get(code).getSocketChannel().shutdownOutput();
+                        //codesToReceive.get(code).getSocketChannel().shutdownOutput();
                         codesToReceive.remove(code);
                         codes.remove(code);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
-                }else {
-//                    codesToReceive.get(code).getSelectionKey().interestOps(SelectionKey.OP_WRITE);
-//                    selectionKey.interestOps(SelectionKey.OP_WRITE);
+                }
+                else{
+
+                    sk.interestOps(0);
+                    //System.out.println("=0");
+                    byteBuffer.flip();
+                    var ioHandler = codesToReceive.get(code);
+                    ioHandler.getByteBuffer().clear();
+                    ioHandler.getByteBuffer().put(byteBuffer.array(),0,byteBuffer.limit());
+                    ioHandler.getByteBuffer().flip();
+                    ioHandler.getSk().interestOps(SelectionKey.OP_WRITE);
+                    byteBuffer.clear();
+
                 }
                 break;
 
             case RECEIVE:
-//                if (selectionKey.isWritable()) {
-//
-//                    selectionKey.interestOps(SelectionKey.OP_READ);
-//                    byteBuffer.clear();
-//                    ByteBuffer temp = codes.get(code).getByteBuffer();
-//                    byteBuffer.put(temp.array(),0,temp.position());
-//
-//                    byteBuffer.flip();
-//
-//                    try {
-//                        socketChannel.write(byteBuffer);
-//                        if(byteBuffer.limit()<byteBuffer.capacity()){
-//
-//                            codesToReceive.remove(code);
-//                            codes.remove(code);
-//
-//                            this.socketChannel.shutdownOutput();
-//                            this.socketChannel.close();
-//
-//                        }
-//                    } catch (IOException e) {
-//                        e.printStackTrace();
-//                    }
-//
-//                    codes.get(code).getByteBuffer().clear();
-//                    codes.get(code).getSelectionKey().interestOps(SelectionKey.OP_READ);
-//                    byteBuffer.clear();
-//
-//                }
+                //System.out.println("receive");
+
+
+                //re += byteBuffer.limit();
+                //byteBuffer.rewind();
+
+                if(sendStatus==0){
+                    try {
+                        socketChannel.write(byteBuffer);
+                        if(byteBuffer.position()<byteBuffer.limit())
+                            return;
+                        sk.interestOps(0);
+                        sendStatus++;
+                        byteBuffer.clear();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    return;
+                }
+
+
+                sk.interestOps(0);
+
+                try {
+//                    while (socketChannel.write(byteBuffer)<=0||byteBuffer.position()<byteBuffer.limit());
+                    socketChannel.write(byteBuffer);
+
+                    if(byteBuffer.position()<byteBuffer.limit()){
+                        sk.interestOps(SelectionKey.OP_WRITE);
+                        return;
+                    }
+
+//                    System.out.println(byteBuffer.position() + "   " + byteBuffer.limit());
+                    if(byteBuffer.limit()<byteBuffer.capacity()){
+
+                        socketChannel.shutdownOutput();
+//                        System.out.println("receive   " + re);
+                        sk.cancel();
+
+                    }else {
+                        codes.get(code).getSk().interestOps(SelectionKey.OP_READ);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
         }
 
+        //System.gc();
     }
 
     enum STATUS{
@@ -208,7 +295,9 @@ public class IOHandler implements Runnable{
         return byteBuffer;
     }
 
-    public SelectionKey getSelectionKey() {
-        return selectionKey;
+    public SelectionKey getSk() {
+        return sk;
     }
+
+
 }
