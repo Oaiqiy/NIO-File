@@ -15,17 +15,13 @@ public class IOHandler implements Runnable{
     private static Random random = new Random();
 
     private Integer code;
-
-    //private long send;
-    //private long re;
-
     private String fileName;
     private Long size;
     STATUS status = STATUS.INIT;
     private final SocketChannel socketChannel;
     private ByteBuffer byteBuffer = ByteBuffer.allocate(1024*128);
     private SelectionKey sk;
-
+    private int sendStatus = 0;
 
     IOHandler(SocketChannel c, Selector selector)  {
 
@@ -54,6 +50,7 @@ public class IOHandler implements Runnable{
             case INIT:
 
                 try {
+                    byteBuffer.clear();
                     length = socketChannel.read(byteBuffer);
                     byteBuffer.flip();
                 } catch (IOException e) {
@@ -76,12 +73,14 @@ public class IOHandler implements Runnable{
                    byteBuffer.clear();
                    byteBuffer.putInt(code);
                    byteBuffer.flip();
-                   try {
-                        socketChannel.write(byteBuffer);
-                   } catch (IOException e) {
-                        e.printStackTrace();
-                   }
-                   byteBuffer.clear();
+//                   try {
+//                        socketChannel.write(byteBuffer);
+//                   } catch (IOException e) {
+//                        e.printStackTrace();
+//                   }
+                    sk.interestOps(SelectionKey.OP_WRITE);
+
+//                    byteBuffer.clear();
 
                 }else {
                     status = STATUS.RECEIVE;
@@ -98,15 +97,20 @@ public class IOHandler implements Runnable{
                         byteBuffer.putLong(ioHandler.size);
                         byteBuffer.put(ioHandler.fileName.getBytes(StandardCharsets.UTF_8));
                         byteBuffer.flip();
-                        try {
 
-                            ioHandler.getSocketChannel().write(byteBuffer);
-                            byteBuffer.rewind();
-                            socketChannel.write(byteBuffer);
+                        codes.get(code).getByteBuffer().clear();
+                        codes.get(code).getByteBuffer().put(byteBuffer.array(),0,byteBuffer.limit());
+                        codes.get(code).getSk().interestOps(SelectionKey.OP_WRITE);
+                        sk.interestOps(SelectionKey.OP_WRITE);
 
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
+
+//                        try {
+//                            ioHandler.getSocketChannel().write(byteBuffer);
+//                            byteBuffer.rewind();
+//                            socketChannel.write(byteBuffer);
+//                        } catch (IOException e) {
+//                            e.printStackTrace();
+//                        }
                     } else {
                         byteBuffer.putInt(2);
                         byteBuffer.flip();
@@ -123,13 +127,47 @@ public class IOHandler implements Runnable{
                     }
 
                 }
-                byteBuffer.clear();
+//                byteBuffer.clear();
                 break;
 
 
             case SEND:
+                if (sk.isWritable()) {
+
+                    if (sendStatus == 0) {
+                        try {
+                            socketChannel.write(byteBuffer);
+                            if (byteBuffer.position() < byteBuffer.limit()) {
+                                return;
+                            }
+                            byteBuffer.clear();
+                            sendStatus++;
+                            sk.interestOps(0);
+                            byteBuffer.clear();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    } else if (sendStatus == 1) {
+                        try {
+                            socketChannel.write(byteBuffer);
+                            if (byteBuffer.position() < byteBuffer.limit()) {
+                                return;
+                            }
+                            byteBuffer.clear();
+                            sendStatus++;
+                            sk.interestOps(SelectionKey.OP_READ);
+                            byteBuffer.clear();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+
+                    }
+                    return;
+                }
+
                 //System.out.println("send");
                 try {
+
                     length = socketChannel.read(byteBuffer);
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -184,13 +222,29 @@ public class IOHandler implements Runnable{
 
             case RECEIVE:
                 //System.out.println("receive");
-                sk.interestOps(0);
+
 
                 //re += byteBuffer.limit();
                 //byteBuffer.rewind();
 
-                try {
+                if(sendStatus==0){
+                    try {
+                        socketChannel.write(byteBuffer);
+                        if(byteBuffer.position()<byteBuffer.limit())
+                            return;
+                        sk.interestOps(0);
+                        sendStatus++;
+                        byteBuffer.clear();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    return;
+                }
 
+
+                sk.interestOps(0);
+
+                try {
 //                    while (socketChannel.write(byteBuffer)<=0||byteBuffer.position()<byteBuffer.limit());
                     socketChannel.write(byteBuffer);
 
@@ -198,7 +252,6 @@ public class IOHandler implements Runnable{
                         sk.interestOps(SelectionKey.OP_WRITE);
                         return;
                     }
-
 
 //                    System.out.println(byteBuffer.position() + "   " + byteBuffer.limit());
                     if(byteBuffer.limit()<byteBuffer.capacity()){
@@ -208,7 +261,6 @@ public class IOHandler implements Runnable{
                         sk.cancel();
 
                     }else {
-
                         codes.get(code).getSk().interestOps(SelectionKey.OP_READ);
                     }
                 } catch (IOException e) {

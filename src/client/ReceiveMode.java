@@ -68,6 +68,7 @@ public class ReceiveMode implements Runnable{
             path = path.resolve(name);
 
             File file = path.toFile();
+
             if(file.exists()){
                 file.delete();
             }
