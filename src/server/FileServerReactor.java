@@ -56,6 +56,7 @@ public class FileServerReactor implements Runnable{
                 var socketChannel = serverSocketChannel.accept();
                 if (socketChannel!=null){
                    new IOHandler(socketChannel,selector);
+                   System.out.println(socketChannel.socket().getInetAddress().getHostAddress()+':'+socketChannel.socket().getPort() + "  connect");
                 }
             } catch (IOException e) {
                 e.printStackTrace();

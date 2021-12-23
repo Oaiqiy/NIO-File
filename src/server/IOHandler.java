@@ -11,18 +11,21 @@ import java.util.Random;
 
 public class IOHandler implements Runnable{
     private static HashMap<Integer,IOHandler> codes = new HashMap<>();
-    private static HashMap<Integer,SocketChannel> codesToReceive = new HashMap<>();
+    private static HashMap<Integer,IOHandler> codesToReceive = new HashMap<>();
     private static Random random = new Random();
 
     private Integer code;
 
-    private int count = 0;
+    //private long send;
+    //private long re;
 
     private String fileName;
     private Long size;
-
     STATUS status = STATUS.INIT;
     private final SocketChannel socketChannel;
+    private ByteBuffer byteBuffer = ByteBuffer.allocate(1024*128);
+    private SelectionKey sk;
+
 
     IOHandler(SocketChannel c, Selector selector)  {
 
@@ -31,7 +34,8 @@ public class IOHandler implements Runnable{
         socketChannel = c;
         try {
             socketChannel.configureBlocking(false);
-            socketChannel.register(selector, SelectionKey.OP_READ).attach(this);
+            sk = socketChannel.register(selector, SelectionKey.OP_READ);
+            sk.attach(this);
             selector.wakeup();
         } catch (IOException e) {
             e.printStackTrace();
@@ -39,22 +43,23 @@ public class IOHandler implements Runnable{
 
     }
 
+
     @Override
     public void run() {
-        ByteBuffer byteBuffer = ByteBuffer.allocate(1024*1024*128);
+
 
         int length;
-        try {
-            length = socketChannel.read(byteBuffer);
-            byteBuffer.flip();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return;
-        }
-
 
         switch (status){
             case INIT:
+
+                try {
+                    length = socketChannel.read(byteBuffer);
+                    byteBuffer.flip();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
+                }
                 if(byteBuffer.getInt()==0){
                    status = STATUS.SEND;
                    size = byteBuffer.getLong();
@@ -80,10 +85,13 @@ public class IOHandler implements Runnable{
                     status = STATUS.RECEIVE;
                     int temp = byteBuffer.getInt();
                     var ioHandler = codes.get(temp);
-                    codesToReceive.put(temp, socketChannel);
+
                     byteBuffer.clear();
 
                     if (codes.containsKey(temp)) {
+
+                        codesToReceive.put(temp, this);
+                        code = temp;
                         byteBuffer.putInt(1);
                         byteBuffer.putLong(ioHandler.size);
                         byteBuffer.put(ioHandler.fileName.getBytes(StandardCharsets.UTF_8));
@@ -99,7 +107,11 @@ public class IOHandler implements Runnable{
                         byteBuffer.putInt(2);
                         byteBuffer.flip();
                         try {
+
                             socketChannel.write(byteBuffer);
+                            socketChannel.shutdownOutput();
+                            socketChannel.close();
+
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
@@ -107,34 +119,95 @@ public class IOHandler implements Runnable{
                     }
 
                 }
+                byteBuffer.clear();
                 break;
 
 
             case SEND:
+                //System.out.println("send");
+                try {
+                    length = socketChannel.read(byteBuffer);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
+                }
+
+                //send+=length;
+
+
                 if(length>0){
-                    try {
-                        count+=length;
-                        var sc = codesToReceive.get(code);
-                        while (sc.write(byteBuffer)<=0){}
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+                    //System.out.println(">0");
+//                    try {
+//                        var sc = codesToReceive.get(code);
+//                        while (sc.write(byteBuffer)<=0){}
+//                    } catch (IOException e) {
+//                        e.printStackTrace();
+//                    }
                 }else if(length<0){
                     try {
-                        System.out.println(count);
+//                        System.out.println("send  " + send);
+
+                        byteBuffer.flip();
+                        var ioHandler = codesToReceive.get(code);
+                        ioHandler.getByteBuffer().clear();
+                        ioHandler.getByteBuffer().put(byteBuffer.array(),0,byteBuffer.limit());
+                        ioHandler.getSk().interestOps(SelectionKey.OP_WRITE);
+                        sk.cancel();
+
                         codes.get(code).getSocketChannel().close();
-                        codesToReceive.get(code).shutdownOutput();
+                        //codesToReceive.get(code).getSocketChannel().shutdownOutput();
                         codesToReceive.remove(code);
                         codes.remove(code);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
+                }
+                else{
 
+                    sk.interestOps(0);
+                    //System.out.println("=0");
+                    byteBuffer.flip();
+                    var ioHandler = codesToReceive.get(code);
+                    ioHandler.getByteBuffer().clear();
+                    ioHandler.getByteBuffer().put(byteBuffer.array(),0,byteBuffer.limit());
+                    ioHandler.getSk().interestOps(SelectionKey.OP_WRITE);
+                    byteBuffer.clear();
 
                 }
+                break;
+
             case RECEIVE:
+                //System.out.println("receive");
+                sk.interestOps(0);
+                byteBuffer.flip();
+                //re += byteBuffer.limit();
+                byteBuffer.rewind();
+
+                try {
+
+                    while (socketChannel.write(byteBuffer)<=0||byteBuffer.position()<byteBuffer.limit());
+
+
+
+
+//                    System.out.println(byteBuffer.position() + "   " + byteBuffer.limit());
+                    if(byteBuffer.limit()<byteBuffer.capacity()){
+
+                        socketChannel.shutdownOutput();
+//                        System.out.println("receive   " + re);
+                        sk.cancel();
+
+                    }else {
+
+                        codes.get(code).getSk().interestOps(SelectionKey.OP_READ);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
         }
-        byteBuffer.clear();
+
+        //System.gc();
     }
 
     enum STATUS{
@@ -155,4 +228,14 @@ public class IOHandler implements Runnable{
     public SocketChannel getSocketChannel() {
         return socketChannel;
     }
+
+    public ByteBuffer getByteBuffer() {
+        return byteBuffer;
+    }
+
+    public SelectionKey getSk() {
+        return sk;
+    }
+
+
 }
