@@ -11,27 +11,24 @@ import java.util.Random;
 
 public class IOHandler implements Runnable{
     private static HashMap<Integer,IOHandler> codes = new HashMap<>();
-    private static HashMap<Integer,SocketChannel> codesToReceive = new HashMap<>();
+    private static HashMap<Integer,IOHandler> codesToReceive = new HashMap<>();
     private static Random random = new Random();
 
     private Integer code;
-
-    private int count = 0;
-
     private String fileName;
     private Long size;
-
     STATUS status = STATUS.INIT;
     private final SocketChannel socketChannel;
+    private SelectionKey selectionKey;
+    ByteBuffer byteBuffer = ByteBuffer.allocate(1024*1024*16);
 
     IOHandler(SocketChannel c, Selector selector)  {
-
-
-
+        System.out.println("aaaa");
         socketChannel = c;
         try {
             socketChannel.configureBlocking(false);
-            socketChannel.register(selector, SelectionKey.OP_READ).attach(this);
+            selectionKey = socketChannel.register(selector, SelectionKey.OP_READ);
+            selectionKey.attach(this);
             selector.wakeup();
         } catch (IOException e) {
             e.printStackTrace();
@@ -41,20 +38,27 @@ public class IOHandler implements Runnable{
 
     @Override
     public void run() {
-        ByteBuffer byteBuffer = ByteBuffer.allocate(1024*1024*128);
-
         int length;
-        try {
-            length = socketChannel.read(byteBuffer);
-            byteBuffer.flip();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return;
-        }
 
 
+//        try {
+//            length = socketChannel.read(byteBuffer);
+//            byteBuffer.flip();
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//            return;
+//        }
+//
         switch (status){
             case INIT:
+
+                try {
+                    length = socketChannel.read(byteBuffer);
+                    byteBuffer.flip();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
+                }
                 if(byteBuffer.getInt()==0){
                    status = STATUS.SEND;
                    size = byteBuffer.getLong();
@@ -80,10 +84,11 @@ public class IOHandler implements Runnable{
                     status = STATUS.RECEIVE;
                     int temp = byteBuffer.getInt();
                     var ioHandler = codes.get(temp);
-                    codesToReceive.put(temp, socketChannel);
+                    codesToReceive.put(temp, this);
                     byteBuffer.clear();
 
                     if (codes.containsKey(temp)) {
+                        code = temp;
                         byteBuffer.putInt(1);
                         byteBuffer.putLong(ioHandler.size);
                         byteBuffer.put(ioHandler.fileName.getBytes(StandardCharsets.UTF_8));
@@ -107,34 +112,77 @@ public class IOHandler implements Runnable{
                     }
 
                 }
+                byteBuffer.clear();
                 break;
 
 
             case SEND:
+//                if(selectionKey.isWritable())
+//                    return;
+
+                try {
+                    length = socketChannel.read(byteBuffer);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
+                }
+
                 if(length>0){
                     try {
-                        count+=length;
+                        byteBuffer.flip();
                         var sc = codesToReceive.get(code);
-                        while (sc.write(byteBuffer)<=0){}
+                        while (sc.getSocketChannel().write(byteBuffer)<=0){}
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
                 }else if(length<0){
                     try {
-                        System.out.println(count);
+                        codesToReceive.get(code).getSelectionKey().interestOps(SelectionKey.OP_WRITE);
                         codes.get(code).getSocketChannel().close();
-                        codesToReceive.get(code).shutdownOutput();
+                        codesToReceive.get(code).getSocketChannel().shutdownOutput();
                         codesToReceive.remove(code);
                         codes.remove(code);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
-
-
+                }else {
+//                    codesToReceive.get(code).getSelectionKey().interestOps(SelectionKey.OP_WRITE);
+//                    selectionKey.interestOps(SelectionKey.OP_WRITE);
                 }
+                break;
+
             case RECEIVE:
+//                if (selectionKey.isWritable()) {
+//
+//                    selectionKey.interestOps(SelectionKey.OP_READ);
+//                    byteBuffer.clear();
+//                    ByteBuffer temp = codes.get(code).getByteBuffer();
+//                    byteBuffer.put(temp.array(),0,temp.position());
+//
+//                    byteBuffer.flip();
+//
+//                    try {
+//                        socketChannel.write(byteBuffer);
+//                        if(byteBuffer.limit()<byteBuffer.capacity()){
+//
+//                            codesToReceive.remove(code);
+//                            codes.remove(code);
+//
+//                            this.socketChannel.shutdownOutput();
+//                            this.socketChannel.close();
+//
+//                        }
+//                    } catch (IOException e) {
+//                        e.printStackTrace();
+//                    }
+//
+//                    codes.get(code).getByteBuffer().clear();
+//                    codes.get(code).getSelectionKey().interestOps(SelectionKey.OP_READ);
+//                    byteBuffer.clear();
+//
+//                }
         }
-        byteBuffer.clear();
+
     }
 
     enum STATUS{
@@ -154,5 +202,13 @@ public class IOHandler implements Runnable{
 
     public SocketChannel getSocketChannel() {
         return socketChannel;
+    }
+
+    public ByteBuffer getByteBuffer() {
+        return byteBuffer;
+    }
+
+    public SelectionKey getSelectionKey() {
+        return selectionKey;
     }
 }

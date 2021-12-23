@@ -27,7 +27,7 @@ public class SendMode implements Runnable{
         while (true){
             System.out.print("Please enter file path:");
             //String path = scanner.nextLine();
-            String path = "D:\\WIN_20200614_08_58_08_Pro.mp4";
+            String path = "F:\\FromC\\新建文件夹 (2)\\Captures\\腾讯会议 2020-06-02 12-59-19.mp4";
             try {
                 File file = new File(path);
                 if (!file.exists()){
@@ -44,7 +44,7 @@ public class SendMode implements Runnable{
             }
         }
 
-        ByteBuffer byteBuffer = ByteBuffer.allocate(1024*1024*512);
+        ByteBuffer byteBuffer = ByteBuffer.allocate(1024*1024);
         byteBuffer.putInt(0);
         byteBuffer.putLong(size);
         byteBuffer.put(name.getBytes(StandardCharsets.UTF_8));

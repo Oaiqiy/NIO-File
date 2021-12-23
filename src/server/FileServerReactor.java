@@ -45,6 +45,10 @@ public class FileServerReactor implements Runnable{
                 ((Runnable) key.attachment()).run();
             }
             selected.clear();
+
+          //  System.out.println("bbbb");
+
+
         }
     }
 
