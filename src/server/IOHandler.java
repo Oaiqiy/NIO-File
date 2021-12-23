@@ -60,6 +60,8 @@ public class IOHandler implements Runnable{
                     e.printStackTrace();
                     return;
                 }
+
+
                 if(byteBuffer.getInt()==0){
                    status = STATUS.SEND;
                    size = byteBuffer.getLong();
@@ -97,9 +99,11 @@ public class IOHandler implements Runnable{
                         byteBuffer.put(ioHandler.fileName.getBytes(StandardCharsets.UTF_8));
                         byteBuffer.flip();
                         try {
+
                             ioHandler.getSocketChannel().write(byteBuffer);
                             byteBuffer.rewind();
                             socketChannel.write(byteBuffer);
+
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
@@ -151,6 +155,7 @@ public class IOHandler implements Runnable{
                         var ioHandler = codesToReceive.get(code);
                         ioHandler.getByteBuffer().clear();
                         ioHandler.getByteBuffer().put(byteBuffer.array(),0,byteBuffer.limit());
+                        ioHandler.getByteBuffer().flip();
                         ioHandler.getSk().interestOps(SelectionKey.OP_WRITE);
                         sk.cancel();
 
@@ -170,6 +175,7 @@ public class IOHandler implements Runnable{
                     var ioHandler = codesToReceive.get(code);
                     ioHandler.getByteBuffer().clear();
                     ioHandler.getByteBuffer().put(byteBuffer.array(),0,byteBuffer.limit());
+                    ioHandler.getByteBuffer().flip();
                     ioHandler.getSk().interestOps(SelectionKey.OP_WRITE);
                     byteBuffer.clear();
 
@@ -179,15 +185,19 @@ public class IOHandler implements Runnable{
             case RECEIVE:
                 //System.out.println("receive");
                 sk.interestOps(0);
-                byteBuffer.flip();
+
                 //re += byteBuffer.limit();
-                byteBuffer.rewind();
+                //byteBuffer.rewind();
 
                 try {
 
-                    while (socketChannel.write(byteBuffer)<=0||byteBuffer.position()<byteBuffer.limit());
+//                    while (socketChannel.write(byteBuffer)<=0||byteBuffer.position()<byteBuffer.limit());
+                    socketChannel.write(byteBuffer);
 
-
+                    if(byteBuffer.position()<byteBuffer.limit()){
+                        sk.interestOps(SelectionKey.OP_WRITE);
+                        return;
+                    }
 
 
 //                    System.out.println(byteBuffer.position() + "   " + byteBuffer.limit());
