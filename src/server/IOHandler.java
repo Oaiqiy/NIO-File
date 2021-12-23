@@ -55,7 +55,23 @@ public class IOHandler implements Runnable{
                     byteBuffer.flip();
                 } catch (IOException e) {
                     e.printStackTrace();
+                    try {
+                        socketChannel.close();
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
+                    }
                     return;
+                }
+
+                if(length<8){
+                    try {
+                        socketChannel.close();
+                        return;
+
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+
                 }
 
 
@@ -102,6 +118,8 @@ public class IOHandler implements Runnable{
                         codes.get(code).getByteBuffer().put(byteBuffer.array(),0,byteBuffer.limit());
                         codes.get(code).getSk().interestOps(SelectionKey.OP_WRITE);
                         sk.interestOps(SelectionKey.OP_WRITE);
+
+
 
 
 //                        try {
@@ -170,6 +188,14 @@ public class IOHandler implements Runnable{
 
                     length = socketChannel.read(byteBuffer);
                 } catch (IOException e) {
+                    try {
+                        socketChannel.close();
+                        codesToReceive.get(code).getSocketChannel().close();
+                        codes.remove(code);
+                        codesToReceive.remove(code);
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
+                    }
                     e.printStackTrace();
                     return;
                 }
@@ -241,7 +267,6 @@ public class IOHandler implements Runnable{
                     return;
                 }
 
-
                 sk.interestOps(0);
 
                 try {
@@ -275,8 +300,6 @@ public class IOHandler implements Runnable{
     enum STATUS{
         INIT,SEND,RECEIVE;
     }
-
-
 
 
     public String getFileName() {

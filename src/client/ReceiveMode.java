@@ -82,11 +82,6 @@ public class ReceiveMode implements Runnable{
 
 
 
-
-
-
-
-
                 int l ;
                 long count = 0;
                 int rate = 0;
