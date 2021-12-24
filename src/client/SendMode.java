@@ -14,9 +14,12 @@ public class SendMode implements Runnable{
 
     private SocketChannel socketChannel;
 
+
     public SendMode(SocketChannel socketChannel) {
         this.socketChannel = socketChannel;
     }
+
+
 
     @Override
     public void run() {

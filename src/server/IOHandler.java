@@ -19,7 +19,7 @@ public class IOHandler implements Runnable{
     private Long size;
     STATUS status = STATUS.INIT;
     private final SocketChannel socketChannel;
-    private ByteBuffer byteBuffer = ByteBuffer.allocate(1024*128);
+    private ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
     private SelectionKey sk;
     private int sendStatus = 0;
 
@@ -179,6 +179,9 @@ public class IOHandler implements Runnable{
                             e.printStackTrace();
                         }
 
+
+                        System.out.println(socketChannel.socket().getInetAddress().getHostAddress()+':'+socketChannel.socket().getPort() + "  begin sending");
+
                     }
                     return;
                 }
@@ -264,6 +267,9 @@ public class IOHandler implements Runnable{
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
+
+
+                    System.out.println(socketChannel.socket().getInetAddress().getHostAddress()+':'+socketChannel.socket().getPort() + "  begin receiving");
                     return;
                 }
 

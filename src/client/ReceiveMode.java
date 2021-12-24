@@ -40,7 +40,7 @@ public class ReceiveMode implements Runnable{
         while (true){
             System.out.print("Please enter verification code:");
             int code = scanner.nextInt();
-            byteBuffer = ByteBuffer.allocate(1024*1024*512);
+            byteBuffer = ByteBuffer.allocate(1024*1024*128);
             byteBuffer.putInt(1);
             byteBuffer.putInt(code);
             byteBuffer.flip();
