@@ -2,10 +2,7 @@ package client;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
-import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
 
 public class Client {
@@ -17,7 +14,8 @@ public class Client {
         try {
              socketChannel = SocketChannel.open();
              //socketChannel.connect(new InetSocketAddress(2222));
-             socketChannel.connect(new InetSocketAddress(59603));
+             socketChannel.connect(new InetSocketAddress(ClientConfig.host, ClientConfig.port));
+
         } catch (IOException e) {
             System.out.println("Please check network connection!");
             return;

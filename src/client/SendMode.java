@@ -10,6 +10,11 @@ import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
 
+
+/**
+ * 客户端发送模式
+ */
+
 public class SendMode implements Runnable{
 
     private SocketChannel socketChannel;
@@ -47,7 +52,7 @@ public class SendMode implements Runnable{
             }
         }
 
-        ByteBuffer byteBuffer = ByteBuffer.allocate(1024*1024*512);
+        ByteBuffer byteBuffer = ByteBuffer.allocate(ClientConfig.bufferSize);
         byteBuffer.putInt(0);
         byteBuffer.putLong(size);
         byteBuffer.put(name.getBytes(StandardCharsets.UTF_8));
@@ -83,17 +88,19 @@ public class SendMode implements Runnable{
                 rate = now;
 
             }
-            //System.out.println(count + "  " + size);
+
+            socketChannel.shutdownOutput();
+
+            byteBuffer.clear();
+            while(socketChannel.read(byteBuffer)!=-1){}
 
             System.out.println("\nEnd of sending. Bye~");
-            //socketChannel.shutdownOutput();
 
             socketChannel.close();
 
         } catch (IOException e) {
             e.printStackTrace();
         }
-
 
     }
 

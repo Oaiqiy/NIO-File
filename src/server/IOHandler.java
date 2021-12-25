@@ -9,6 +9,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Random;
 
+/**
+ * 系统IO核心类，包括全部的IO操作。
+ */
+
 public class IOHandler implements Runnable{
     private static HashMap<Integer,IOHandler> codes = new HashMap<>();
     private static HashMap<Integer,IOHandler> codesToReceive = new HashMap<>();
@@ -19,13 +23,12 @@ public class IOHandler implements Runnable{
     private Long size;
     STATUS status = STATUS.INIT;
     private final SocketChannel socketChannel;
-    private ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+    private ByteBuffer byteBuffer = ByteBuffer.allocate(ServerConfig.bufferSize);
     private SelectionKey sk;
     private int sendStatus = 0;
 
+
     IOHandler(SocketChannel c, Selector selector)  {
-
-
 
         socketChannel = c;
         try {
@@ -47,6 +50,11 @@ public class IOHandler implements Runnable{
         int length;
 
         switch (status){
+
+            /**
+             * 初始话模式，连接尚未确认发送还是接收。
+             */
+
             case INIT:
 
                 try {
@@ -89,14 +97,9 @@ public class IOHandler implements Runnable{
                    byteBuffer.clear();
                    byteBuffer.putInt(code);
                    byteBuffer.flip();
-//                   try {
-//                        socketChannel.write(byteBuffer);
-//                   } catch (IOException e) {
-//                        e.printStackTrace();
-//                   }
+
                     sk.interestOps(SelectionKey.OP_WRITE);
 
-//                    byteBuffer.clear();
 
                 }else {
                     status = STATUS.RECEIVE;
@@ -119,16 +122,6 @@ public class IOHandler implements Runnable{
                         codes.get(code).getSk().interestOps(SelectionKey.OP_WRITE);
                         sk.interestOps(SelectionKey.OP_WRITE);
 
-
-
-
-//                        try {
-//                            ioHandler.getSocketChannel().write(byteBuffer);
-//                            byteBuffer.rewind();
-//                            socketChannel.write(byteBuffer);
-//                        } catch (IOException e) {
-//                            e.printStackTrace();
-//                        }
                     } else {
                         byteBuffer.putInt(2);
                         byteBuffer.flip();
@@ -145,10 +138,12 @@ public class IOHandler implements Runnable{
                     }
 
                 }
-//                byteBuffer.clear();
+
                 break;
 
-
+            /**
+             * 发送模式
+              */
             case SEND:
                 if (sk.isWritable()) {
 
@@ -186,37 +181,14 @@ public class IOHandler implements Runnable{
                     return;
                 }
 
-                //System.out.println("send");
+
                 try {
 
                     length = socketChannel.read(byteBuffer);
+
                 } catch (IOException e) {
                     try {
                         socketChannel.close();
-                        codesToReceive.get(code).getSocketChannel().close();
-                        codes.remove(code);
-                        codesToReceive.remove(code);
-                    } catch (IOException ex) {
-                        ex.printStackTrace();
-                    }
-                    e.printStackTrace();
-                    return;
-                }
-
-                //send+=length;
-
-
-                if(length>0){
-                    //System.out.println(">0");
-//                    try {
-//                        var sc = codesToReceive.get(code);
-//                        while (sc.write(byteBuffer)<=0){}
-//                    } catch (IOException e) {
-//                        e.printStackTrace();
-//                    }
-                }else if(length<0){
-                    try {
-//                        System.out.println("send  " + send);
 
                         byteBuffer.flip();
                         var ioHandler = codesToReceive.get(code);
@@ -226,7 +198,34 @@ public class IOHandler implements Runnable{
                         ioHandler.getSk().interestOps(SelectionKey.OP_WRITE);
                         sk.cancel();
 
-                        codes.get(code).getSocketChannel().close();
+                        codes.remove(code);
+                        codesToReceive.remove(code);
+
+
+
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
+                    }
+                    e.printStackTrace();
+                    return;
+                }
+
+
+
+                if(length>0){
+
+                }else if(length<0){
+                    try {
+
+                        byteBuffer.flip();
+                        var ioHandler = codesToReceive.get(code);
+                        ioHandler.getByteBuffer().clear();
+                        ioHandler.getByteBuffer().put(byteBuffer.array(),0,byteBuffer.limit());
+                        ioHandler.getByteBuffer().flip();
+                        ioHandler.getSk().interestOps(SelectionKey.OP_WRITE);
+                        sk.cancel();
+
+                        socketChannel.close();
                         //codesToReceive.get(code).getSocketChannel().shutdownOutput();
                         codesToReceive.remove(code);
                         codes.remove(code);
@@ -237,7 +236,6 @@ public class IOHandler implements Runnable{
                 else{
 
                     sk.interestOps(0);
-                    //System.out.println("=0");
                     byteBuffer.flip();
                     var ioHandler = codesToReceive.get(code);
                     ioHandler.getByteBuffer().clear();
@@ -249,12 +247,11 @@ public class IOHandler implements Runnable{
                 }
                 break;
 
+            /**
+             * 接收模式
+              */
             case RECEIVE:
-                //System.out.println("receive");
 
-
-                //re += byteBuffer.limit();
-                //byteBuffer.rewind();
 
                 if(sendStatus==0){
                     try {
@@ -276,7 +273,6 @@ public class IOHandler implements Runnable{
                 sk.interestOps(0);
 
                 try {
-//                    while (socketChannel.write(byteBuffer)<=0||byteBuffer.position()<byteBuffer.limit());
                     socketChannel.write(byteBuffer);
 
                     if(byteBuffer.position()<byteBuffer.limit()){
@@ -284,11 +280,11 @@ public class IOHandler implements Runnable{
                         return;
                     }
 
-//                    System.out.println(byteBuffer.position() + "   " + byteBuffer.limit());
+
                     if(byteBuffer.limit()<byteBuffer.capacity()){
 
                         socketChannel.shutdownOutput();
-//                        System.out.println("receive   " + re);
+
                         sk.cancel();
 
                     }else {
@@ -300,7 +296,6 @@ public class IOHandler implements Runnable{
 
         }
 
-        //System.gc();
     }
 
     enum STATUS{
@@ -308,9 +303,7 @@ public class IOHandler implements Runnable{
     }
 
 
-    public String getFileName() {
-        return fileName;
-    }
+
 
     public Long getSize() {
         return size;

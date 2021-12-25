@@ -5,6 +5,10 @@ import java.net.InetSocketAddress;
 import java.nio.channels.SocketChannel;
 import java.nio.file.Path;
 
+/**
+ * 并发测试类，注释的代码包括创建文件夹，以及未发送方复制文件操作，共创建32个线程。
+ */
+
 public class Concurrent {
 
     public static void main(String[] args) throws IOException, InterruptedException {

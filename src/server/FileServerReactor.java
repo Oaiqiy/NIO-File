@@ -8,6 +8,9 @@ import java.nio.channels.ServerSocketChannel;
 import java.util.Iterator;
 import java.util.Set;
 
+/**
+ * 处理连接请求
+ */
 public class FileServerReactor implements Runnable{
     Selector selector;
     ServerSocketChannel serverSocketChannel;
@@ -16,7 +19,7 @@ public class FileServerReactor implements Runnable{
         try {
             serverSocketChannel = ServerSocketChannel.open();
             serverSocketChannel.configureBlocking(false);
-            serverSocketChannel.bind(new InetSocketAddress(59603));
+            serverSocketChannel.bind(new InetSocketAddress(ServerConfig.port));
             selector = Selector.open();
 
             var selectionKey =serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
@@ -46,7 +49,7 @@ public class FileServerReactor implements Runnable{
             }
             selected.clear();
 
-          //  System.out.println("bbbb");
+
 
 
         }
